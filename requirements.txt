@@ -13,3 +13,4 @@ python-slugify
 google-genai
 groq
 google-generativeai
+beautifulsoup4
