@@ -1,0 +1,27 @@
+{
+    "stats": {
+        "companies": {
+            "imported": 116,
+            "updated": 0,
+            "skipped": 0
+        },
+        "problems": {
+            "imported": 71,
+            "updated": 0,
+            "skipped": 0
+        },
+        "sectors": {
+            "imported": 15,
+            "updated": 0,
+            "skipped": 0
+        },
+        "mappings": {
+            "imported": 24,
+            "updated": 0,
+            "skipped": 0
+        }
+    },
+    "warnings": 0,
+    "errors": 0,
+    "duration": 1.7177224159240723
+}

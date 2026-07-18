@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy
+pydantic
+pydantic-settings
+python-dotenv
+sentence-transformers
+chromadb
+APScheduler
+httpx
+pandas
+python-slugify
+google-genai
+groq
+google-generativeai

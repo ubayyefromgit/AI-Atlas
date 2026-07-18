@@ -1,0 +1,3 @@
+Question: {question}
+
+Provide your answer based ONLY on the context provided. Remember to cite your sources using [S1], [S2], etc.
