@@ -361,17 +361,17 @@ The system is built on a modern full-stack architecture:
 
 ```mermaid
 flowchart TD
-    User([User]) <--> Frontend[React Frontend\n(Vite + TypeScript)]
+    User([User]) <--> Frontend[React Frontend<br/>Vite + TypeScript]
     Frontend <--> API[FastAPI Backend]
     
     subgraph Data Layer
-        API <--> SQL[(SQLite DB\nStructured Metadata)]
-        API <--> Vector[(ChromaDB\nSemantic Vectors)]
+        API <--> SQL[(SQLite DB<br/>Structured Metadata)]
+        API <--> Vector[(ChromaDB<br/>Semantic Vectors)]
     end
     
     subgraph AI Pipeline
-        API --> RAG[Ask AI Module\n(RAG Pipeline)]
-        RAG <--> LLM[LLM API\n(Gemini / Claude)]
+        API --> RAG[Ask AI Module<br/>RAG Pipeline]
+        RAG <--> LLM[LLM API<br/>Gemini / Claude]
         RAG <--> Vector
     end
     
