@@ -108,3 +108,4 @@ class DiscoveryPipeline:
             run_log.completed_at = datetime.now(timezone.utc)
             run_log.duration_ms = int((time.time() - start_time) * 1000)
             db.commit()
+            return run_log

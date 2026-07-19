@@ -24,7 +24,7 @@ export function AdminDashboard() {
   const { mutate: bulkApprove, isPending: isBulkApproving } = useBulkApproveCandidates();
   const { mutate: bulkReject, isPending: isBulkRejecting } = useBulkRejectCandidates();
 
-  const [processingId, setProcessingId] = useState<number | null>(null);
+  const [processingAction, setProcessingAction] = useState<{ id: number, type: 'approve' | 'reject' } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const [sector, setSector] = useState('');
@@ -39,6 +39,7 @@ export function AdminDashboard() {
   const [upsertSlug, setUpsertSlug] = useState('');
 
   const [pipelineStep, setPipelineStep] = useState(0);
+  const [resultMessage, setResultMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -66,7 +67,18 @@ export function AdminDashboard() {
   const handleRunDiscovery = (e: React.FormEvent) => {
     e.preventDefault();
     if (!sector || !country) return;
-    runDiscovery({ sector, country });
+    setResultMessage(null);
+    runDiscovery({ sector, country }, {
+      onSuccess: (data: any) => {
+        setResultMessage({ type: 'success', text: data.message });
+      },
+      onError: (error: any) => {
+        setResultMessage({ 
+          type: 'error', 
+          text: error?.response?.data?.detail || error.message || 'Pipeline failed to complete' 
+        });
+      }
+    });
   };
 
   const toggleSelection = (id: number) => {
@@ -80,13 +92,13 @@ export function AdminDashboard() {
   };
 
   const handleApprove = (id: number) => {
-    setProcessingId(id);
-    approveCandidate(id, { onSettled: () => setProcessingId(null) });
+    setProcessingAction({ id, type: 'approve' });
+    approveCandidate(id, { onSettled: () => setProcessingAction(null) });
   };
 
   const handleReject = (id: number) => {
-    setProcessingId(id);
-    rejectCandidate(id, { onSettled: () => setProcessingId(null) });
+    setProcessingAction({ id, type: 'reject' });
+    rejectCandidate(id, { onSettled: () => setProcessingAction(null) });
   };
 
   const handleBulkApprove = () => {
@@ -243,6 +255,14 @@ export function AdminDashboard() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+              {resultMessage && !isRunning && (
+                <div className={`mt-6 p-4 rounded-lg border flex items-start gap-3 ${resultMessage.type === 'success' ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400' : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400'}`}>
+                  {resultMessage.type === 'success' ? <CheckCircle2 className="mt-0.5 shrink-0" size={18} /> : <AlertTriangle className="mt-0.5 shrink-0" size={18} />}
+                  <div className="text-sm font-medium">
+                    {resultMessage.text}
                   </div>
                 </div>
               )}
@@ -474,27 +494,27 @@ export function AdminDashboard() {
                           <div className="flex xl:flex-col gap-3 shrink-0 self-start w-full xl:w-auto">
                             <button
                               onClick={() => handleApprove(candidate.id)}
-                              disabled={processingId !== null || isBulkApproving || isBulkRejecting}
+                              disabled={processingAction !== null || isBulkApproving || isBulkRejecting}
                               className="flex-1 flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-green-600 text-white shadow hover:bg-green-700 h-9 px-4 py-2 disabled:opacity-50"
                             >
-                              {processingId === candidate.id ? (
+                              {processingAction?.id === candidate.id && processingAction.type === 'approve' ? (
                                 <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin mr-2" />
                               ) : (
                                 <CheckCircle2 size={16} className="mr-2" />
                               )}
-                              {processingId === candidate.id ? 'Approving...' : 'Approve'}
+                              {processingAction?.id === candidate.id && processingAction.type === 'approve' ? 'Approving...' : 'Approve'}
                             </button>
                             <button
                               onClick={() => handleReject(candidate.id)}
-                              disabled={processingId !== null || isBulkApproving || isBulkRejecting}
+                              disabled={processingAction !== null || isBulkApproving || isBulkRejecting}
                               className="flex-1 flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:bg-gray-100 dark:hover:bg-zinc-900 h-9 px-4 py-2 text-red-600 disabled:opacity-50"
                             >
-                              {processingId === candidate.id ? (
+                              {processingAction?.id === candidate.id && processingAction.type === 'reject' ? (
                                 <div className="w-4 h-4 rounded-full border-2 border-red-600 border-t-transparent animate-spin mr-2" />
                               ) : (
                                 <XCircle size={16} className="mr-2" />
                               )}
-                              {processingId === candidate.id ? 'Rejecting...' : 'Reject'}
+                              {processingAction?.id === candidate.id && processingAction.type === 'reject' ? 'Rejecting...' : 'Reject'}
                             </button>
                           </div>
                         </div>

@@ -18,8 +18,18 @@ router = APIRouter(dependencies=[Depends(get_admin_token)])
 @router.post("/discover")
 def trigger_discovery(request: DiscoveryRequest, db: Session = Depends(get_db)):
     pipeline = DiscoveryPipeline()
-    pipeline.run(db, request.sector, request.country)
-    return {"message": f"Discovery pipeline finished for {request.sector} in {request.country}"}
+    run_log = pipeline.run(db, request.sector, request.country)
+    
+    if run_log.status == "failed":
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Discovery Pipeline failed: {run_log.error_message}"
+        )
+        
+    if run_log.candidates_retrieved == 0:
+        return {"message": f"Pipeline finished successfully, but no valid candidates were found for {request.sector} in {request.country}."}
+        
+    return {"message": f"Pipeline finished successfully! Discovered {run_log.candidates_retrieved} new candidates."}
 
 @router.get("/discovery", response_model=List[DiscoveryCandidateResponse])
 def list_candidates(db: Session = Depends(get_db)):
