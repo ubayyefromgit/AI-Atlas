@@ -357,43 +357,56 @@ Advanced users can access admin features at http://127.0.0.1:8000/docs.
 
 ## Architecture
 
-The system is built on a modern full-stack architecture:
+The system is built on a modern full-stack architecture with an autonomous **AI Agent Extension Layer** and cloud deployment setup:
 
 ```mermaid
 flowchart TD
-    User([User]) <--> Frontend[React Frontend<br/>Vite + TypeScript]
-    Frontend <--> API[FastAPI Backend]
+    User([User / Client]) <--> Frontend[React Frontend<br/>Vite + TypeScript]
+    Frontend -- "Hosted on Vercel" --> API[FastAPI Backend<br/>Hosted on Render]
     
     subgraph Data Layer
         API <--> SQL[(SQLite DB<br/>Structured Metadata)]
         API <--> Vector[(ChromaDB<br/>Semantic Vectors)]
     end
+
+    subgraph AI Agent Extension Layer
+        API <--> AgentService[AgentService<br/>Planner Flow]
+        AgentService <--> Memory[AgentMemory<br/>Lightweight Context]
+        AgentService <--> Registry[ToolRegistry]
+        Registry --> KnowledgeTool[KnowledgeTool<br/>Grounded RAG]
+        Registry --> NewsTool[NewsTool<br/>News Engine]
+        Registry --> DiscTool[DiscoveryTool<br/>Market Intelligence]
+        Registry --> GKTool[GeneralKnowledgeTool<br/>Gemini Fallback + Disclaimer]
+    end
     
     subgraph AI Pipeline
-        API --> RAG[Ask AI Module<br/>RAG Pipeline]
-        RAG <--> LLM[LLM API<br/>Gemini / Claude]
+        KnowledgeTool <--> RAG[Ask AI Module]
+        RAG <--> LLM[LLM API<br/>Gemini / Groq / Ollama]
         RAG <--> Vector
     end
     
-    subgraph Background Tasks
-        Cron[Scheduler] --> Fetch[News Fetcher]
-        Fetch --> LLMFilter[LLM Relevance Filter]
-        LLMFilter --> SQL
-        LLMFilter --> Vector
+    subgraph Background Tasks & Agent Jobs
+        Cron[APScheduler] --> Fetch[News Fetcher & Agent News Monitor]
+        Cron --> AutoDisc[Agent Auto-Discovery Job]
+        Fetch --> SQL
+        Fetch --> Vector
+        AutoDisc --> AutoApprove[Auto-Approve >= 0.90 & Index KB]
     end
 ```
 
 | Layer | Technology |
 |---|---|
-| **Frontend** | React + Vite + TypeScript + Tailwind CSS |
-| **Backend** | FastAPI + SQLAlchemy + Pydantic |
-| **Database** | SQLite (relational data) |
+| **Frontend** | React + Vite + TypeScript + Tailwind CSS (Deployed on Vercel) |
+| **Backend** | FastAPI + SQLAlchemy + Pydantic (Deployed on Render) |
+| **AI Agent Layer** | `AgentService` + `ToolRegistry` + `AgentMemory` (`/api/v1/agent/chat`) |
+| **Agent Tools** | `KnowledgeTool`, `NewsTool`, `DiscoveryTool`, `GeneralKnowledgeTool` |
+| **Database** | SQLite (relational metadata, auto-seeded on boot) |
 | **Vector DB** | ChromaDB (semantic search embeddings) |
 | **Embeddings** | `sentence-transformers/all-MiniLM-L6-v2` |
 | **LLM (Cloud)** | Google Gemini / Groq (Llama3) |
 | **LLM (Local)** | Ollama (Llama3 running on your machine) |
 
-Detailed architecture documentation is in `docs/architecture.md`.
+Detailed architecture documentation is available in [Architecture_and_Design_Decisions.md](file:///c:/Users/BISON%20TECH/Desktop/AIML/Proj/AI-Atlas/docs/Architecture_and_Design_Decisions.md).
 
 ---
 
@@ -401,12 +414,16 @@ Detailed architecture documentation is in `docs/architecture.md`.
 
 - ✅ SQLite database schema with SQLAlchemy 2.0 ORM
 - ✅ Abstract Repository layer for future extensibility
-- ✅ Dataset ingestion pipeline (116 companies, 71 problems, 15 sectors)
+- ✅ Dataset ingestion pipeline (116 companies, 71 problems, 15 sectors, 24 mappings)
 - ✅ ChromaDB vector indexing with `sentence-transformers` embeddings
 - ✅ Hybrid semantic + keyword search engine
 - ✅ Grounded RAG pipeline (Gemini, Groq, Ollama)
 - ✅ Structured AI responses with source citations
-- ✅ Automated company news fetching (APScheduler)
-- ✅ Admin dashboard with AI-driven company discovery pipeline
-- ✅ Full REST API with pagination, filtering, and search
-- ✅ Modern React frontend integrated with all backend services
+- ✅ Autonomous **AI Agent Layer** (`AgentService` planner flow & `ToolRegistry`)
+- ✅ General Knowledge Fallback with explicit disclaimer for out-of-domain queries
+- ✅ Lightweight **Agent Conversation Memory** across multi-turn sessions
+- ✅ Scheduled **Agent Auto-Discovery Job** with high-confidence ($\ge 0.90$) auto-approval & KB indexing
+- ✅ Scheduled **Agent News Monitor Job** with automated KB indexing
+- ✅ **Agent Mode UI Switch** in Ask AI frontend panel
+- ✅ Automated database startup seeding optimized for 512MB RAM free-tier limits
+- ✅ Dual cloud deployment on **Render** (FastAPI) and **Vercel** (React)
