@@ -55,6 +55,18 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
 @app.on_event("startup")
 async def startup_event():
     logger.info("Starting up AI Atlas API")
+    try:
+        import os
+        from core.database import Base, engine
+        import models
+        # Ensure database directory exists if using relative SQLite path
+        db_dir = os.path.dirname(settings.DATABASE_URL.replace("sqlite:///", ""))
+        if db_dir and not os.path.isabs(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables verified and created successfully.")
+    except Exception as e:
+        logger.error(f"Error during database initialization: {e}")
     # from scheduler import start_scheduler
     # start_scheduler()
 
