@@ -97,16 +97,8 @@ async def startup_event():
                         db.commit()
                         logger.info(f"Dataset ingested successfully: {db.query(Company).count()} companies imported.")
                         
-                        # Build Knowledge Base Index
-                        try:
-                            from services.knowledge_base.indexer import KnowledgeBaseIndexer
-                            indexer = KnowledgeBaseIndexer(db)
-                            indexer.index_sectors()
-                            indexer.index_companies()
-                            indexer.index_problems()
-                            logger.info("Knowledge base vector index built successfully.")
-                        except Exception as idx_err:
-                            logger.error(f"Failed to build vector index: {idx_err}")
+                        # Skip heavy batch vector indexing on startup to stay within Render's 512MB RAM free limit
+                        logger.info("Database seeding complete. Heavy batch indexing skipped on boot to conserve RAM.")
                     else:
                         logger.warning(f"Data directory not found at: {data_dir}")
                 else:
