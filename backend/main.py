@@ -76,6 +76,15 @@ async def shutdown_event():
     # from scheduler import stop_scheduler
     # stop_scheduler()
 
+@app.get("/", tags=["Root"])
+async def root():
+    return {
+        "message": "AI Atlas API is running",
+        "docs": "/docs",
+        "health": "/health",
+        "api_v1": settings.API_V1_STR
+    }
+
 @app.get("/health", tags=["Health"])
 async def health_check():
     """
