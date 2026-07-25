@@ -72,9 +72,23 @@ class NewsPipeline:
                 unique_articles = Deduplicator.filter_duplicates(db, company.id, relevant_articles)
                 stats["duplicates_removed"] = len(relevant_articles) - len(unique_articles)
                 
-                # 4. Summarize and Store
-                for article in unique_articles:
-                    summary = Summarizer.summarize(article)
+                # 4. Summarize and Store (summarize top 3 with LLM to respect rate limits, fallback for rest)
+                for idx, article in enumerate(unique_articles):
+                    if idx < 3:
+                        summary = Summarizer.summarize(article)
+                    else:
+                        # Fallback to cleaned description for remaining articles
+                        raw_desc = article.get("description", "")
+                        summary = raw_desc
+                        if raw_desc:
+                            try:
+                                from bs4 import BeautifulSoup
+                                soup = BeautifulSoup(raw_desc, "html.parser")
+                                summary = soup.get_text(separator=" ", strip=True)
+                            except Exception:
+                                summary = raw_desc
+                        if not summary:
+                            summary = article.get("title", "")
                     
                     db_article = NewsArticle(
                         company_id=company.id,
@@ -134,6 +148,14 @@ class NewsPipeline:
             logger.error(f"Pipeline error for company {company.name}: {e}")
             db.rollback()
             
+            # Mark company as attempted to prevent infinite polling queue loops
+            try:
+                company.news_last_refreshed = datetime.now(timezone.utc)
+                db.add(company)
+                db.commit()
+            except Exception:
+                db.rollback()
+
             # Update Run Log on failure
             run_log.status = "failed"
             run_log.error_message = str(e)

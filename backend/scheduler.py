@@ -35,21 +35,11 @@ def refresh_news_job():
         logger.info(f"Found {len(companies_to_refresh)} companies to refresh.")
         
         for company in companies_to_refresh:
-            max_retries = 3
-            backoff = 5 # seconds
-            
-            for attempt in range(max_retries):
-                try:
-                    stats = NewsService.refresh_company_news(db, company.slug)
-                    logger.info(f"Successfully refreshed {company.name}: {stats}")
-                    break # Success, move to next company
-                except Exception as e:
-                    logger.warning(f"Attempt {attempt + 1} failed for {company.name}: {e}")
-                    if attempt < max_retries - 1:
-                        time.sleep(backoff)
-                        backoff *= 2
-                    else:
-                        logger.error(f"All retries failed for {company.name}.")
+            try:
+                stats = NewsService.refresh_company_news(db, company.slug)
+                logger.info(f"Successfully refreshed {company.name}: {stats}")
+            except Exception as e:
+                logger.error(f"News refresh failed for {company.name}: {e}")
                         
     except Exception as e:
         logger.error(f"Global error in news refresh job: {e}")

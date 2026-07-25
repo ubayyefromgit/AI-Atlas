@@ -13,4 +13,8 @@ dist/
 build/
 .DS_Store
 chroma_db/
+backend/chroma_db/
 database/*.db
+*.db
+logs/*.log
+logs/*.json

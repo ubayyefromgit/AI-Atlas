@@ -41,7 +41,16 @@ class GoogleRssProvider(NewsProvider):
                     title = item.find('title').text if item.find('title') is not None else ""
                     link = item.find('link').text if item.find('link') is not None else ""
                     pubDate = item.find('pubDate').text if item.find('pubDate') is not None else ""
-                    description = item.find('description').text if item.find('description') is not None else ""
+                    raw_desc = item.find('description').text if item.find('description') is not None else ""
+                    description = raw_desc
+                    if raw_desc:
+                        try:
+                            from bs4 import BeautifulSoup
+                            soup = BeautifulSoup(raw_desc, "html.parser")
+                            description = soup.get_text(separator=" ", strip=True)
+                        except Exception:
+                            description = raw_desc
+
                     source_element = item.find('source')
                     source = source_element.text if source_element is not None else "Google News"
                     

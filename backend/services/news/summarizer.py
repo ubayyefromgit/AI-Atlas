@@ -36,7 +36,7 @@ class Summarizer:
             Description: {desc}
             """
             
-            response = llm.generate_response(system_prompt, user_prompt, temperature=0.2)
+            response = llm.generate_response(system_prompt, user_prompt, temperature=0.2, max_retries=1)
             
             if response and len(response.strip()) > 10:
                 return response.strip()

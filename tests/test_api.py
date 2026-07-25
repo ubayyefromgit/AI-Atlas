@@ -6,11 +6,15 @@ from sqlalchemy.orm import sessionmaker
 from backend.main import app
 from backend.core.database import get_db, Base
 
+from sqlalchemy.pool import StaticPool
+
 # Test database setup
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test_ai_atlas.db"
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
