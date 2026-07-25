@@ -65,6 +65,60 @@ async def startup_event():
             os.makedirs(db_dir, exist_ok=True)
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables verified and created successfully.")
+        
+        # Auto-seed initial dataset if company directory is empty
+        def auto_seed_if_empty():
+            from core.database import SessionLocal
+            from models.company import Company
+            db = SessionLocal()
+            try:
+                company_count = db.query(Company).count()
+                if company_count == 0:
+                    logger.info("No companies found in database. Starting initial dataset ingestion & index build...")
+                    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    data_dir = os.path.join(root_dir, "data", "atlas_dataset")
+                    
+                    if os.path.exists(data_dir):
+                        from services.ingestion.loader import CSVLoader
+                        from services.ingestion.importer import DataImporter
+                        from services.ingestion.report import ImportReport
+                        
+                        loader = CSVLoader(data_dir=data_dir)
+                        df_sectors = loader.load_csv("sectors_reference.csv")
+                        df_companies = loader.load_csv("companies_germany.csv")
+                        df_problems = loader.load_csv("problems_germany.csv")
+                        df_mappings = loader.load_csv("problem_company_mapping.csv")
+                        
+                        report = ImportReport()
+                        importer = DataImporter(db=db, report=report, dry_run=False)
+                        importer.import_sectors(df_sectors)
+                        importer.import_companies(df_companies)
+                        importer.import_problems(df_problems)
+                        importer.import_mappings(df_mappings)
+                        db.commit()
+                        logger.info(f"Dataset ingested successfully: {db.query(Company).count()} companies imported.")
+                        
+                        # Build Knowledge Base Index
+                        try:
+                            from services.knowledge_base.indexer import KnowledgeBaseIndexer
+                            indexer = KnowledgeBaseIndexer(db)
+                            indexer.index_sectors()
+                            indexer.index_companies()
+                            indexer.index_problems()
+                            logger.info("Knowledge base vector index built successfully.")
+                        except Exception as idx_err:
+                            logger.error(f"Failed to build vector index: {idx_err}")
+                    else:
+                        logger.warning(f"Data directory not found at: {data_dir}")
+                else:
+                    logger.info(f"Database already populated with {company_count} companies.")
+            except Exception as seed_err:
+                db.rollback()
+                logger.error(f"Error during dataset auto-seeding: {seed_err}")
+            finally:
+                db.close()
+                
+        auto_seed_if_empty()
     except Exception as e:
         logger.error(f"Error during database initialization: {e}")
     # from scheduler import start_scheduler
