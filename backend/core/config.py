@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     DISCOVERY_TIMEOUT: int = 15
     DISCOVERY_MIN_CONFIDENCE: float = 0.5
     
+    # Agent Enhancements Configuration
+    AGENT_ENABLED: bool = True
+    GENERAL_KNOWLEDGE_ENABLED: bool = True
+    AUTO_DISCOVERY_ENABLED: bool = True
+    AUTO_DISCOVERY_THRESHOLD: float = 0.90
+    NEWS_MONITOR_ENABLED: bool = True
+    
     class Config:
         import os
         env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env")

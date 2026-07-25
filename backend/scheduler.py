@@ -66,8 +66,30 @@ def start_scheduler():
             id="daily_news_refresh",
             replace_existing=True
         )
+        
+        # Schedule Agent Jobs if enabled
+        if settings.AUTO_DISCOVERY_ENABLED:
+            from services.agent.jobs import run_agent_discovery_job
+            scheduler.add_job(
+                run_agent_discovery_job,
+                CronTrigger(hour=3, minute=0, timezone="UTC"),
+                id="agent_auto_discovery",
+                replace_existing=True
+            )
+            logger.info("Scheduled agent_auto_discovery job.")
+            
+        if settings.NEWS_MONITOR_ENABLED:
+            from services.agent.jobs import run_agent_news_monitor_job
+            scheduler.add_job(
+                run_agent_news_monitor_job,
+                CronTrigger(hour=4, minute=0, timezone="UTC"),
+                id="agent_news_monitor",
+                replace_existing=True
+            )
+            logger.info("Scheduled agent_news_monitor job.")
+
         scheduler.start()
-        logger.info("APScheduler started with daily_news_refresh job.")
+        logger.info("APScheduler started.")
 
 def stop_scheduler():
     if scheduler.running:

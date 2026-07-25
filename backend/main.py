@@ -58,7 +58,6 @@ async def startup_event():
     try:
         import os
         from core.database import Base, engine
-        import models
         # Ensure database directory exists if using relative SQLite path
         db_dir = os.path.dirname(settings.DATABASE_URL.replace("sqlite:///", ""))
         if db_dir and not os.path.isabs(db_dir):

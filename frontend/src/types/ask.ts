@@ -20,3 +20,17 @@ export interface AskAIResponse {
   answer: string;
   sources: AskSource[];
 }
+
+export interface AgentAskRequest {
+  question: string;
+  conversation_id?: string;
+  model_provider?: string;
+}
+
+export interface AgentAskResponse {
+  answer: string;
+  sources: AskSource[];
+  conversation_id: string;
+  used_tools: string[];
+  is_general_knowledge: boolean;
+}

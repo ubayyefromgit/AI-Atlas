@@ -1,14 +1,21 @@
 import React, { useState } from 'react';
-import { X, Send, Bot, User, FileText, Globe } from 'lucide-react';
+import { X, Send, Bot, User, Sparkles } from 'lucide-react';
 import { useAskAIContext } from '../contexts/AskAIContext';
 import { useAskAI } from '../hooks/useAskAI';
+import { useAgentChat } from '../hooks/useAgentChat';
 import type { ChatMessage, AskSource } from '../types/ask';
 
 export function AskAIPanel() {
   const { isOpen, setIsOpen, history, addMessage, clearHistory } = useAskAIContext();
   const [input, setInput] = useState('');
   const [selectedProvider, setSelectedProvider] = useState('gemini');
-  const { mutate: askAI, isPending } = useAskAI();
+  const [isAgentMode, setIsAgentMode] = useState(false);
+  const [conversationId, setConversationId] = useState<string | undefined>(undefined);
+
+  const { mutate: askAI, isPending: isAskPending } = useAskAI();
+  const { mutate: agentChat, isPending: isAgentPending } = useAgentChat();
+
+  const isPending = isAskPending || isAgentPending;
 
   if (!isOpen) return null;
 
@@ -19,18 +26,34 @@ export function AskAIPanel() {
     const userMsg: ChatMessage = { role: 'user', content: input };
     addMessage(userMsg);
     
-    askAI(
-      { question: input, model_provider: selectedProvider },
-      {
-        onSuccess: (data) => {
-          addMessage({ role: 'assistant', content: data.answer, sources: data.sources });
-        },
-        onError: (err: any) => {
-          const errMsg = err.response?.data?.detail || "Sorry, I encountered an error. Please try again.";
-          addMessage({ role: 'assistant', content: errMsg });
+    if (isAgentMode) {
+      agentChat(
+        { question: input, model_provider: selectedProvider, conversation_id: conversationId },
+        {
+          onSuccess: (data) => {
+            if (data.conversation_id) setConversationId(data.conversation_id);
+            addMessage({ role: 'assistant', content: data.answer, sources: data.sources });
+          },
+          onError: (err: any) => {
+            const errMsg = err.response?.data?.detail || "Sorry, the AI Agent encountered an error. Please try again.";
+            addMessage({ role: 'assistant', content: errMsg });
+          }
         }
-      }
-    );
+      );
+    } else {
+      askAI(
+        { question: input, model_provider: selectedProvider },
+        {
+          onSuccess: (data) => {
+            addMessage({ role: 'assistant', content: data.answer, sources: data.sources });
+          },
+          onError: (err: any) => {
+            const errMsg = err.response?.data?.detail || "Sorry, I encountered an error. Please try again.";
+            addMessage({ role: 'assistant', content: errMsg });
+          }
+        }
+      );
+    }
     
     setInput('');
   };
@@ -43,6 +66,19 @@ export function AskAIPanel() {
           <span>Ask AI Atlas</span>
         </div>
         <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1 cursor-pointer text-xs select-none bg-blue-100 dark:bg-zinc-800 text-blue-800 dark:text-blue-300 px-2 py-1 rounded-full font-medium">
+            <Sparkles size={12} className={isAgentMode ? 'text-amber-500 fill-amber-500' : 'text-gray-400'} />
+            <span>Agent</span>
+            <input
+              type="checkbox"
+              checked={isAgentMode}
+              onChange={(e) => setIsAgentMode(e.target.checked)}
+              className="sr-only"
+            />
+            <div className={`w-6 h-3 flex items-center rounded-full p-0.5 duration-300 ${isAgentMode ? 'bg-blue-600' : 'bg-gray-300 dark:bg-zinc-600'}`}>
+              <div className={`bg-white w-2 h-2 rounded-full shadow-md transform duration-300 ${isAgentMode ? 'translate-x-3' : ''}`} />
+            </div>
+          </label>
           <select 
             value={selectedProvider} 
             onChange={(e) => setSelectedProvider(e.target.value)}
@@ -53,11 +89,11 @@ export function AskAIPanel() {
             <option value="ollama">Ollama</option>
           </select>
           {history.length > 0 && (
-            <button onClick={clearHistory} className="text-xs text-blue-600 dark:text-blue-400 hover:underline ml-2">
+            <button onClick={clearHistory} className="text-xs text-blue-600 dark:text-blue-400 hover:underline ml-1">
               Clear
             </button>
           )}
-          <button onClick={() => setIsOpen(false)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 ml-2">
+          <button onClick={() => setIsOpen(false)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 ml-1">
             <X size={20} />
           </button>
         </div>
