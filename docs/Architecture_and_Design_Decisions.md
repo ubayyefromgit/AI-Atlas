@@ -1,9 +1,9 @@
 # AI Atlas: Architecture & Design Decisions
 
 ## 1. Overview
-AI Atlas is a scalable, AI-powered intelligence platform tailored for the Food & Beverage (F&B) sector. It leverages a Grounded RAG (Retrieval-Augmented Generation) pipeline to enable natural language discovery of AI companies, solutions, and news relevant to the industry.
+AI Atlas is a scalable, AI-powered intelligence platform tailored for the Food & Beverage (F&B) sector. It combines a Grounded RAG (Retrieval-Augmented Generation) pipeline with an autonomous **AI Agent Extension Layer** to enable natural language discovery of AI companies, solutions, news, and market intelligence relevant to the industry.
 
-This document details the architectural choices, the underlying data model, retrieval design, news pipeline mechanics, update strategies, architectural trade-offs, and future improvements.
+This document details the architectural choices, the underlying data model, retrieval & agent design, news pipeline mechanics, update strategies, deployment architecture, trade-offs, and future improvements.
 
 ---
 
@@ -12,78 +12,132 @@ The system relies on a hybrid persistence strategy, using a relational database 
 
 ### Relational Schema (SQLite)
 The primary entities include:
-- **Company**: Stores core entity information (name, website, location, summary).
-- **Sector/Problem**: Categorization of the business domains and the specific pain points a company solves (e.g., Quality Control, Supply Chain Optimization).
-- **Discovery**: Maintains mapping of how companies fit into specific AI/F&B discovery themes.
+- **Company**: Stores core entity information (name, website, location, summary, maturity, revenue, AI category).
+- **Sector/Problem**: Categorization of business domains and specific pain points solved by companies (e.g., Quality Control, Supply Chain Optimization).
+- **Discovery**: Maintains mapping and candidates of how companies fit into specific AI/F&B discovery themes.
 - **News**: Stores relevant articles fetched from news providers, mapped to companies with relevance scores and summaries.
 - **Notification**: Manages user notifications (e.g., when new relevant news is ingested).
 
 ### Vector Schema (ChromaDB)
-- **KB Chunk**: Knowledge Base chunks are stored as vectors in ChromaDB. Each chunk represents segmented text from company descriptions, problems, and recent news. These vectors enable dense semantic search during the retrieval phase.
+- **KB Chunk**: Knowledge Base chunks are stored as vectors in ChromaDB. Each chunk represents segmented text from company descriptions, problems, and recent news. These vectors enable dense semantic search during retrieval.
 
 ---
 
-## 3. Retrieval Design (Grounded RAG)
+## 3. Retrieval Design & Grounded RAG
 The RAG pipeline is implemented in the `backend/services/ask_ai` module. It bridges user queries with factual, grounded context.
 
 ### Query Processing & Analysis
 1. **Query Analyzer**: Evaluates user input using an LLM to extract keywords, intent, and filters (e.g., location, sector).
-2. **Context Manager**: Uses the analyzed query to perform a dense vector search on ChromaDB. It retrieves the most relevant `KB Chunk`s. 
-3. **Structured Fallback**: If vector search yields low confidence, standard SQL text matching and filtering act as a fallback to ensure relevant results.
+2. **Context Manager**: Uses the analyzed query to perform dense vector search on ChromaDB, retrieving the top `KB Chunk`s. 
+3. **Structured Fallback**: If vector search yields low confidence, standard SQL text matching acts as a fallback to ensure relevant results.
 
 ### Response Generation
-1. **Prompt Builder**: Synthesizes the retrieved chunks into a robust system prompt, instructing the LLM to generate answers strictly based on the provided context.
-2. **Citation Extractor**: The generated response is parsed to identify source citations, which are linked back to the original companies or news articles.
-3. **Response Formatter**: Formats the final payload for the frontend, ensuring a clean, rich UI presentation.
+1. **Prompt Builder**: Synthesizes retrieved chunks into a system prompt instructing the LLM to generate answers strictly based on provided context.
+2. **Citation Extractor**: Identifies source citations linked back to original companies or news articles.
+3. **Response Formatter**: Formats final payload for frontend presentation.
 
 ---
 
-## 4. News Pipeline
-The news ingestion pipeline (`backend/services/news`) is designed to keep the platform's intelligence up-to-date.
+## 4. AI Agent Extension Layer (`backend/services/agent`)
 
-1. **Providers**: Uses modular providers like `google_rss_provider` and `gnews_provider`.
-2. **Ingestion & Deduplication**: Fetches articles matching company names and keywords. The `deduplicator.py` ensures identical or highly similar articles are ignored.
-3. **Relevance Filtering**: `relevance_filter.py` applies an LLM-based zero-shot classification to score the article's relevance specifically to the F&B sector and the target company. Low-relevance articles are discarded.
-4. **Summarization**: `summarizer.py` generates a concise summary of the article.
-5. **Indexing**: `news_indexer.py` updates the SQLite database and pushes the new summaries into ChromaDB as new KB chunks.
+The application includes an **AI Agent Layer** following the Open-Closed Principle. Existing services act as tools orchestrated by the `AgentService`.
+
+```
+                  ┌─────────────────────────────────────────┐
+                  │          User Query / Client            │
+                  └────────────────────┬────────────────────┘
+                                       │
+                         ┌─────────────┴─────────────┐
+                         ▼                           ▼
+                 /api/v1/ask                 /api/v1/agent/chat
+                (Grounded RAG)               (AI Agent Mode)
+                         │                           │
+                         │                           ▼
+                         │                    ┌──────────────┐
+                         │                    │ AgentService │
+                         │                    └──────┬───────┘
+                         │                           │
+                         │             ┌─────────────┴─────────────┐
+                         │             ▼                           ▼
+                         │     ┌───────────────┐           ┌──────────────┐
+                         │     │ ToolRegistry  │           │ AgentMemory  │
+                         │     └───────┬───────┘           └──────────────┘
+                         │             │
+        ┌────────────────┼─────────────┼────────────────┬────────────────┐
+        ▼                ▼             ▼                ▼                ▼
+┌───────────────┐ ┌─────────────┐ ┌──────────┐ ┌────────────────┐ ┌──────────────┐
+│ KnowledgeTool │ │  NewsTool   │ │Discovery │ │GeneralKnowledge│ │ Agent Jobs   │
+│ (Grounded RAG)│ │(News Engine)│ │   Tool   │ │ Tool (Fallback)│ │ (Auto-Disc.) │
+└───────────────┘ └─────────────┘ └──────────┘ └────────────────┘ └──────────────┘
+```
+
+### Planner Flow
+The `AgentService` implements a structured execution flow:
+```text
+User Query ──► Intent Detection ──► Tool Selection ──► Tool Execution ──► Response Merge ──► Return Answer
+```
+
+### Tool Registry (`ToolRegistry`)
+Exposes existing application core services as modular tools without duplicating business logic:
+- **KnowledgeTool**: Wraps `KnowledgeBaseService` and `AskService` for grounded RAG query resolution over internal entities.
+- **NewsTool**: Wraps `NewsService` for fetching, summarizing, and presenting recent F&B industry news.
+- **DiscoveryTool**: Wraps `QuickDiscoveryService` for live market intelligence and company candidate search.
+- **GeneralKnowledgeTool**: Wraps `LLMFactory` for general reasoning when questions fall outside project domain knowledge.
+
+### General Knowledge Fallback Strategy
+- When retrieval confidence is below `MIN_RETRIEVAL_SCORE` and context is missing:
+  - Invokes `GeneralKnowledgeTool` using Gemini/Groq general reasoning.
+  - Automatically appends mandatory disclaimer:
+    > *"This answer is based on general knowledge and not the project knowledge base."*
+
+### Agent Memory (`AgentMemory`)
+- Maintains lightweight, non-vector in-memory conversation context keyed by `conversation_id`.
+- Stores `last_queries`, `last_responses`, `tool_usage`, and turns to support multi-turn conversational follow-ups.
+
+### Automatic Company Discovery & News Monitoring Jobs
+- **Agent Discovery Job**: Evaluates discovery candidates. If confidence $\ge$ `AUTO_DISCOVERY_THRESHOLD` (default 0.90), it automatically creates the company and indexes it into the Knowledge Base without requiring manual admin approval. Candidates below 0.90 are retained as `PENDING_REVIEW`.
+- **Agent News Monitor Job**: Fetches news, maps articles to companies, and automatically indexes new summaries into the Knowledge Base.
 
 ---
 
-## 5. Update Strategy
-The platform ensures continuous data freshness without manual intervention.
+## 5. News Pipeline
+The news ingestion pipeline (`backend/services/news`) keeps platform intelligence current:
 
-- **Background Scheduler**: A background process (`backend/scheduler.py`) periodically triggers the news pipeline.
-- **Differential Updates**: Instead of rebuilding the entire vector index, the system uses an append-only/upsert strategy for ChromaDB. Only new companies and newly validated news articles are indexed.
-- **Notifications**: Users are alerted via the `Notification` model when high-relevance news alters the landscape for a company they follow.
+1. **Providers**: Uses modular providers (`google_rss_provider`, `gnews_provider`).
+2. **Ingestion & Deduplication**: Fetches matching articles; `deduplicator.py` filters identical or near-duplicate articles.
+3. **Relevance Filtering**: `relevance_filter.py` applies zero-shot classification to score F&B sector relevance.
+4. **Summarization**: `summarizer.py` generates concise summaries.
+5. **Indexing**: `news_indexer.py` updates SQLite and pushes summaries into ChromaDB as KB chunks.
 
 ---
 
-## 6. Trade-offs
+## 6. Deployment Architecture
 
-### SQLite vs. PostgreSQL
-- *Decision*: SQLite was chosen for ease of deployment, zero-configuration setup, and local development speed.
-- *Trade-off*: SQLite lacks native concurrency for heavy write workloads and advanced features (like JSONB). A migration to PostgreSQL would be necessary for high-throughput production environments.
+### Dual Free-Tier Hosting Setup
+- **Backend**: Hosted on **Render** (Free Tier Web Service running Python 3.11 / Uvicorn).
+- **Frontend**: Hosted on **Vercel** (Free Tier CDN with SPA rewrites configured via `frontend/vercel.json`).
+
+### RAM Optimization Strategy
+Render's free tier imposes a strict **512 MB RAM limit**. To avoid Out-Of-Memory (OOM) process crashes:
+- **Startup Auto-Seeding**: Checks SQLite database on boot. If empty, automatically populates 116 companies, 71 problems, 15 sectors, and 24 mappings from `data/atlas_dataset/` CSV files (~30MB RAM).
+- **Lazy Vector Indexing**: Skips heavy PyTorch batch vector indexing on server startup, ensuring background memory remains below 150MB.
+
+---
+
+## 7. Trade-offs
+
+### Relational SQLite vs. PostgreSQL
+- *Decision*: SQLite was chosen for zero-configuration, rapid development, and single-file portability.
+- *Trade-off*: Limited concurrency for heavy concurrent writes. Migration to PostgreSQL would be required for high-throughput scaling.
 
 ### Local ChromaDB vs. Managed Vector DB
-- *Decision*: Local ChromaDB instances are used for the MVP to reduce infrastructure costs and complexity.
-- *Trade-off*: Scaling a local ChromaDB across multiple backend instances is challenging. A managed solution (e.g., Pinecone, Weaviate) would be required for horizontal scaling.
-
-### On-the-fly LLM Relevance Filtering
-- *Decision*: Using the LLM to score news relevance ensures high quality and contextual accuracy.
-- *Trade-off*: It introduces latency and increases API costs during the ingestion phase. 
+- *Decision*: Local ChromaDB instance used for MVP to reduce infrastructure costs.
+- *Trade-off*: Horizontal scaling across multi-node backend clusters requires a cloud vector database (e.g., Pinecone, Qdrant).
 
 ---
 
-## 7. What We'd Improve with More Time
+## 8. What We'd Improve with More Time
 
-1. **Asynchronous Task Queue (Celery/Redis)**
-   - *Improvement*: Offload the news fetching, LLM summarization, and vector indexing to a distributed task queue rather than a simple background scheduler loop. This would prevent blocking and allow horizontal scaling of workers.
-
-2. **Graph Database Integration**
-   - *Improvement*: Transition the relational mappings of Companies, Problems, and Technologies into a Graph Database (like Neo4j) to enable complex multi-hop queries (e.g., "Find companies solving supply chain issues using computer vision in Germany").
-
-3. **Advanced RAG Strategies**
-   - *Improvement*: Implement hybrid search (BM25 sparse + dense vectors), parent-child document retrieval, and query expansion to improve recall on complex user queries.
-
-4. **Production-Ready Persistence**
-   - *Improvement*: Migrate to PostgreSQL and a managed vector database to support clustering and high availability. Add Alembic for robust schema migrations.
+1. **Asynchronous Task Queue (Celery/Redis)**: Offload news fetching, LLM summarization, and vector indexing to background workers.
+2. **Graph Database Integration**: Incorporate Neo4j for multi-hop graph queries across companies, sectors, and problem categories.
+3. **Hybrid Vector Search**: Implement hybrid BM25 + dense vector search for improved retrieval precision.
